@@ -2,49 +2,80 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    hash::Hash,
+    thread::sleep,
+    time::Duration,
     vec,
 };
 
 use test_puzzles::get_level_180;
+
+use crate::test_puzzles::get_level_81;
 mod test_puzzles;
 
-fn main() {
+#[show_image::main]
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let image_data = image::open("./test/test_level_81.png")?;
+    let raw_image = image_data.to_rgb8();
+    let image = show_image::ImageView::new(show_image::ImageInfo::rgb8(1920, 1080), &raw_image);
+
+    // Create a window with default options and display the image.
+    let window = show_image::create_window("image", Default::default())?;
+    window.set_image("image-001", image)?;
+
+    sleep(Duration::from_secs(10));
+
+    Ok(())
+    // let image = image::open("./test/test_level_81.png").unwrap();
+
+    // let window = show_image::create_window("imagfe", Default::default()).unwrap();
+
+    // window.set_image("image-001", image).unwrap();
+
+    // println!("{:?}", image);
+
     // let puzzle = WaterPuzzle {
-    //     flasks: vec![
-    //         Flask {
-    //             contents: vec![
-    //                 Layer {
-    //                     size: 2,
-    //                     content: Liquid::Blue,
-    //                 },
-    //                 Layer {
-    //                     size: 2,
-    //                     content: Liquid::Green,
-    //                 },
-    //             ],
-    //         },
-    //         Flask {
-    //             contents: vec![
-    //                 Layer {
-    //                     size: 2,
-    //                     content: Liquid::Green,
-    //                 },
-    //                 Layer {
-    //                     size: 2,
-    //                     content: Liquid::Blue,
-    //                 },
-    //             ],
-    //         },
-    //         Flask { contents: vec![] },
-    //     ],
+    // flasks: vec![
+    //     Flask {
+    //         contents: vec![
+    //             Layer {
+    //                 size: 2,
+    //                 content: Liquid::Blue,
+    //             },
+    //             Layer {
+    //                 size: 2,
+    //                 content: Liquid::Green,
+    //             },
+    //         ],
+    //         id: 1,
+    //     },
+    //     Flask {
+    //         contents: vec![
+    //             Layer {
+    //                 size: 2,
+    //                 content: Liquid::Green,
+    //             },
+    //             Layer {
+    //                 size: 2,
+    //                 content: Liquid::Blue,
+    //             },
+    //         ],
+    //         id: 2,
+    //     },
+    //     Flask {
+    //         contents: vec![],
+    //         id: 3,
+    //     },
+    // ],
     // };
     // solve(puzzle);
+    // 1 -> 3
+    // 2 -> 1
+    // 3 -> 2
 
-    // println!("{:?}", puzzle);
-    // println!("{:?}", find_available_moves(&puzzle));
-    let level = get_level_180();
-    assert!(level.is_valid());
-    solve(level);
+    // let level = get_level_81();
+    // assert!(level.is_valid());
+    // solve(level);
 }
 
 #[derive(Clone, Hash, PartialEq, Eq, Debug, PartialOrd, Ord)]
@@ -81,6 +112,14 @@ impl WaterPuzzle {
         }
 
         self.make_move(r#move);
+    }
+
+    fn position_move_to_id_move(&self, r#move: &Move) -> Move {
+        Move {
+            from: self.flasks[r#move.from].id,
+            to: self.flasks[r#move.to].id,
+            ammount_to_move: r#move.ammount_to_move,
+        }
     }
 
     fn make_move(&mut self, r#move: &Move) {
@@ -133,14 +172,40 @@ impl WaterPuzzle {
 
                     hm
                 });
-
         liquid_ammount.iter().all(|liquid| *liquid.1 == 4)
     }
 }
 
-#[derive(Clone, Hash, PartialEq, Eq, Debug, PartialOrd, Ord)]
+#[derive(Clone, Debug)]
 pub struct Flask {
     pub contents: Vec<Layer>,
+    id: usize,
+}
+
+impl PartialEq for Flask {
+    fn eq(&self, other: &Self) -> bool {
+        self.contents.eq(&other.contents)
+    }
+}
+
+impl Eq for Flask {}
+
+impl Hash for Flask {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.contents.hash(state)
+    }
+}
+
+impl PartialOrd for Flask {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(&other))
+    }
+}
+
+impl Ord for Flask {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.contents.cmp(&other.contents)
+    }
 }
 
 impl Flask {
@@ -209,50 +274,42 @@ enum Liquid {
     LightBlue,
 }
 
-// fn solve_inner(
-//     water_puzzle: &mut WaterPuzzle,
-//     made_moves: &mut Vec<Move>,
-//     seen: &mut HashSet<WaterPuzzle>,
-//     deapth: u32,
-// ) -> Option<Vec<Move>> {
-//     if deapth > 50 {
-//         return None;
-//     }
+fn solve_dfs(
+    water_puzzle: &mut WaterPuzzle,
+    made_moves: &mut Vec<Move>,
+    seen: &mut HashSet<WaterPuzzle>,
+    max_search_deapth: u32,
+) -> Option<Vec<Move>> {
+    if max_search_deapth <= 0 {
+        return None;
+    }
 
-//     if water_puzzle.is_solved() {
-//         return Some(made_moves.to_owned());
-//     }
+    if water_puzzle.is_solved() {
+        return Some(made_moves.to_owned());
+    }
 
-//     if seen.contains(water_puzzle) {
-//         return None;
-//     }
+    if seen.contains(water_puzzle) {
+        return None;
+    }
+    seen.insert(water_puzzle.clone());
 
-//     seen.insert(water_puzzle.clone());
+    let avail_moves = find_available_moves(water_puzzle);
+    for r#move in avail_moves {
+        water_puzzle.make_leagal_move(&r#move);
+        made_moves.push(r#move.clone());
 
-//     let avail_moves = find_available_moves(water_puzzle);
-//     // println!("Searching deapth: {}", deapth);
-//     for r#move in avail_moves {
-//         water_puzzle.make_leagal_move(&r#move);
-//         made_moves.push(r#move.clone());
+        if let Some(solution) = solve_dfs(water_puzzle, made_moves, seen, max_search_deapth - 1) {
+            return Some(solution);
+        }
 
-//         if let Some(solution) = solve_inner(water_puzzle, made_moves, seen, deapth + 1) {
-//             return Some(solution);
-//         }
+        water_puzzle.make_move(&r#move.inverse());
+        made_moves.pop();
+    }
 
-//         water_puzzle.make_move(&r#move.inverse());
-//         made_moves.pop();
-//     }
-
-//     None
-// }
+    None
+}
 
 fn solve(waterpuzzle: WaterPuzzle) {
-    // println!(
-    //     "{:?}",
-    //     solve_inner(&mut waterpuzzle, &mut vec![], &mut HashSet::new(), 0)
-    // );
-    // return;
-
     let avail_moves = find_available_moves(&waterpuzzle);
     let mut search_queue = vec![(waterpuzzle, avail_moves, vec![])];
     let mut seen: HashSet<WaterPuzzle> = HashSet::new();
@@ -267,48 +324,39 @@ fn solve(waterpuzzle: WaterPuzzle) {
         let mut next_search_queue = vec![];
 
         for (mut puzzle, possible_moves, prev_moves) in search_queue.into_iter() {
-            if seen.contains(&puzzle) {
-                // println!("Skipping because seen");
-                continue;
-            }
-
             for r#move in possible_moves.into_iter() {
-                // println!("Checking move: {:?}", r#move);
-                if puzzle.flasks[r#move.from].is_empty() {
-                    println!("Moves made: {:?}", prev_moves);
-                    println!("puzzle: {:?}", puzzle);
-                }
                 puzzle.make_move(&r#move);
 
                 let move_inverse = r#move.inverse();
 
                 if puzzle.is_solved() {
                     let mut solution = prev_moves.clone();
-                    solution.push(r#move);
+                    solution.push(puzzle.position_move_to_id_move(&r#move));
 
-                    println!("Found solution! {:?}", solution);
+                    println!("Found solution! {:#?}", solution);
                     println!("{:?}", puzzle);
                     return;
                 }
 
-                let available_moves = find_available_moves(&puzzle);
-                if available_moves.len() > 0 {
-                    let mut made_moves = prev_moves.clone();
+                let mut sorted_puzzle = puzzle.clone();
+                sorted_puzzle.flasks.sort_unstable();
+                if !seen.contains(&sorted_puzzle) {
+                    let available_moves = find_available_moves(&sorted_puzzle);
+                    if available_moves.len() > 0 {
+                        let mut made_moves = prev_moves.clone();
 
-                    made_moves.push(r#move);
-
-                    let puzzle = puzzle.clone();
-                    // puzzle.flasks.sort_unstable();
-
-                    // if !seen.contains(&puzzle) {
-                    //     seen.insert(puzzle.clone());
-                    next_search_queue.push((puzzle.clone(), available_moves, made_moves));
-                    // }
+                        made_moves.push(puzzle.position_move_to_id_move(&r#move));
+                        next_search_queue.push((
+                            sorted_puzzle.clone(),
+                            available_moves,
+                            made_moves,
+                        ));
+                    }
+                    seen.insert(sorted_puzzle);
                 }
 
                 puzzle.make_move(&move_inverse);
             }
-            seen.insert(puzzle);
         }
         search_queue = next_search_queue;
         deapth += 1;
@@ -399,6 +447,7 @@ mod tests {
                             content: Liquid::Brown,
                         },
                     ],
+                    id: 0,
                 },
                 Flask {
                     contents: vec![
@@ -411,14 +460,19 @@ mod tests {
                             content: Liquid::Red,
                         },
                     ],
+                    id: 1,
                 },
                 Flask {
                     contents: vec![Layer {
                         size: 2,
                         content: Liquid::Red,
                     }],
+                    id: 2,
                 },
-                Flask { contents: vec![] },
+                Flask {
+                    contents: vec![],
+                    id: 3,
+                },
             ],
         };
 
@@ -437,6 +491,7 @@ mod tests {
                             content: Liquid::Brown,
                         },
                     ],
+                    id: 0,
                 },
                 Flask {
                     contents: vec![
@@ -449,14 +504,19 @@ mod tests {
                             content: Liquid::Red,
                         },
                     ],
+                    id: 1,
                 },
                 Flask {
                     contents: vec![Layer {
                         size: 2,
                         content: Liquid::Red,
                     }],
+                    id: 2,
                 },
-                Flask { contents: vec![] },
+                Flask {
+                    contents: vec![],
+                    id: 3,
+                },
             ],
         };
         assert!(!water_puzzle.is_valid());

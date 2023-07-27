@@ -18,6 +18,7 @@ pub fn get_level_180() -> WaterPuzzle {
                         content: Liquid::Brown,
                     },
                 ],
+                id: 0,
             },
             Flask {
                 contents: vec![
@@ -38,6 +39,7 @@ pub fn get_level_180() -> WaterPuzzle {
                         content: Liquid::Gray,
                     },
                 ],
+                id: 1,
             },
             Flask {
                 contents: vec![
@@ -58,6 +60,7 @@ pub fn get_level_180() -> WaterPuzzle {
                         content: Liquid::DarkGreen,
                     },
                 ],
+                id: 2,
             },
             Flask {
                 contents: vec![
@@ -78,6 +81,7 @@ pub fn get_level_180() -> WaterPuzzle {
                         content: Liquid::Yellow,
                     },
                 ],
+                id: 3,
             },
             Flask {
                 contents: vec![
@@ -98,6 +102,7 @@ pub fn get_level_180() -> WaterPuzzle {
                         content: Liquid::LightGreen,
                     },
                 ],
+                id: 4,
             },
             Flask {
                 contents: vec![
@@ -118,6 +123,7 @@ pub fn get_level_180() -> WaterPuzzle {
                         content: Liquid::Purple,
                     },
                 ],
+                id: 5,
             },
             Flask {
                 contents: vec![
@@ -138,6 +144,7 @@ pub fn get_level_180() -> WaterPuzzle {
                         content: Liquid::DarkBlue,
                     },
                 ],
+                id: 6,
             },
             Flask {
                 contents: vec![
@@ -158,6 +165,7 @@ pub fn get_level_180() -> WaterPuzzle {
                         content: Liquid::DarkBlue,
                     },
                 ],
+                id: 7,
             },
             Flask {
                 contents: vec![
@@ -178,6 +186,7 @@ pub fn get_level_180() -> WaterPuzzle {
                         content: Liquid::LightGreen,
                     },
                 ],
+                id: 8,
             },
             Flask {
                 contents: vec![
@@ -198,6 +207,7 @@ pub fn get_level_180() -> WaterPuzzle {
                         content: Liquid::Red,
                     },
                 ],
+                id: 9,
             },
             Flask {
                 contents: vec![
@@ -218,6 +228,7 @@ pub fn get_level_180() -> WaterPuzzle {
                         content: Liquid::LightGreen,
                     },
                 ],
+                id: 10,
             },
             Flask {
                 contents: vec![
@@ -238,9 +249,16 @@ pub fn get_level_180() -> WaterPuzzle {
                         content: Liquid::Yellow,
                     },
                 ],
+                id: 11,
             },
-            Flask { contents: vec![] },
-            Flask { contents: vec![] },
+            Flask {
+                contents: vec![],
+                id: 12,
+            },
+            Flask {
+                contents: vec![],
+                id: 13,
+            },
         ],
     };
 
@@ -248,6 +266,164 @@ pub fn get_level_180() -> WaterPuzzle {
     iter.for_each(|flask| flask.contents.reverse());
 
     puzzle
+}
+
+pub fn get_level_81() -> WaterPuzzle {
+    WaterPuzzle {
+        flasks: vec![
+            Flask {
+                contents: vec![
+                    Layer {
+                        content: Liquid::LightGreen,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::Gray,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::Purple,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::Yellow,
+                        size: 1,
+                    },
+                ],
+                id: 1,
+            },
+            Flask {
+                contents: vec![
+                    Layer {
+                        content: Liquid::Gray,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::DarkGreen,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::Yellow,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::Brown,
+                        size: 1,
+                    },
+                ],
+                id: 2,
+            },
+            Flask {
+                contents: vec![
+                    Layer {
+                        content: Liquid::DarkGreen,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::Brown,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::Gray,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::Brown,
+                        size: 1,
+                    },
+                ],
+                id: 3,
+            },
+            Flask {
+                contents: vec![
+                    Layer {
+                        content: Liquid::Purple,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::LightGreen,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::DarkBlue,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::Yellow,
+                        size: 1,
+                    },
+                ],
+                id: 4,
+            },
+            Flask {
+                contents: vec![
+                    Layer {
+                        content: Liquid::Purple,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::DarkBlue,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::Purple,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::DarkGreen,
+                        size: 1,
+                    },
+                ],
+                id: 5,
+            },
+            Flask {
+                contents: vec![
+                    Layer {
+                        content: Liquid::DarkBlue,
+                        size: 2,
+                    },
+                    Layer {
+                        content: Liquid::LightGreen,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::DarkGreen,
+                        size: 1,
+                    },
+                ],
+                id: 6,
+            },
+            Flask {
+                contents: vec![
+                    Layer {
+                        content: Liquid::Brown,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::Gray,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::Yellow,
+                        size: 1,
+                    },
+                    Layer {
+                        content: Liquid::LightGreen,
+                        size: 1,
+                    },
+                ],
+                id: 7,
+            },
+            Flask {
+                contents: vec![],
+                id: 8,
+            },
+            Flask {
+                contents: vec![],
+                id: 9,
+            },
+        ],
+    }
 }
 
 // Liqucontent::LightGreen "lightgreen",
