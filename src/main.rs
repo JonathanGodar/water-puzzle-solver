@@ -3,36 +3,287 @@
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
-    thread::sleep,
-    time::Duration,
     vec,
 };
 
-use test_puzzles::get_level_180;
+use image::{Rgb, ImageBuffer, RgbImage, GenericImageView};
+use imageproc::drawing::Canvas;
+use show_image::Color;
 
-use crate::test_puzzles::get_level_81;
 mod test_puzzles;
+
+fn is_background_color(color: Rgb<u8>) -> bool {
+    for channel in color.0.iter() {
+        if channel > &25 {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn is_flask_outline_color(color: Rgb<u8>) -> bool {
+    for channel in color.0.iter() {
+        if channel < &195 || channel > &205 {
+            return false;
+        }
+    }
+    return true;
+}
+const GAME_AREA_TOP_LEFT: (u32, u32) = (10, 222);
+const GAME_AREA_BOTTOM_RIGHT: (u32, u32) = (832, 1582);
+
+
+fn find_flask_interior_start(image: &RgbImage, flask_middle: u32, flask_top: u32) -> Option<u32> {
+    for y in flask_top..image.height() {
+        if is_background_color(*image.get_pixel(flask_middle, y)) {
+            return Some(y);
+        }
+    }
+
+    None
+}
+
+enum FlaskContentStartErr {
+    InvalidFlask,
+    NoContents
+}
+
+fn find_flask_content_start(image: &RgbImage, flask_middle: u32, flask_interior_start: u32) -> Result<u32, FlaskContentStartErr> {
+    for y in flask_interior_start..image.height() {
+        let pixel = *image.get_pixel(flask_middle, y);
+        if is_flask_outline_color(pixel) {
+            return Err(FlaskContentStartErr::NoContents)
+        }
+      
+        if !is_background_color(pixel) {
+            return Ok(y);
+        }
+    }
+
+    Err(FlaskContentStartErr::InvalidFlask)
+}
+
+fn square_color_distance(color_1: Rgb<u8>, color_2: Rgb<u8>) -> u32 {
+    (color_1[0] as u32).abs_diff(color_2[0] as u32).pow(2) + 
+    (color_1[1] as u32).abs_diff(color_2[1] as u32).pow(2) + 
+    (color_1[2] as u32).abs_diff(color_2[2] as u32).pow(2) 
+}
+
+fn get_flask_contents(image: &RgbImage, left_bound: u32, right_bound: u32, flask_top: u32) -> Vec<(u32, Rgb<u8>)>  {
+    let flask_middle = (right_bound + left_bound) / 2;
+
+    let flask_interior_start = find_flask_interior_start(image, flask_middle, flask_top).expect("Invalid flask");
+    let flask_content_start_result = find_flask_content_start(image, flask_middle, flask_interior_start);
+
+    let flask_content_start = match flask_content_start_result {
+        Ok(flask_content_start) => flask_content_start,
+        Err(FlaskContentStartErr::InvalidFlask) => panic!("Invalid flask"),
+        Err(FlaskContentStartErr::NoContents) => return vec![],
+    };
+
+
+    let mut contents = vec![];
+    struct ColorLayer {
+        top_position: u32,
+        bottom_position: u32,
+        color: Rgb<u8>,
+    }
+
+    let mut prev_color_top = flask_content_start;
+    let mut prev_color = *image.get_pixel(flask_middle, flask_content_start);
+
+    let mut maybe_flask_bottom: Option<u32> = None;
+    for y in flask_content_start..image.height()  {
+        let curr_color = *image.get_pixel(flask_middle, y);
+        
+        if is_flask_outline_color(curr_color) {
+            // Deals with antialiasing
+            if (y-1) - prev_color_top > 5 {
+                contents.push(ColorLayer {
+                    top_position: prev_color_top,
+                    bottom_position: y - 1,
+                    color: prev_color,
+                });
+            }
+
+            maybe_flask_bottom = Some(y);
+            break;
+        }
+
+        let square_color_distance = square_color_distance(prev_color, curr_color);
+        if square_color_distance > 20u32.pow(2) {
+            println!("Adding color from: {}, to: {}", prev_color_top, y-1);
+            contents.push(ColorLayer {
+                top_position: prev_color_top,
+                bottom_position: y - 1,
+                color: prev_color,
+            });
+
+            prev_color = curr_color;
+            prev_color_top = y;
+        }
+    }
+    
+    let flask_interior_end = maybe_flask_bottom.unwrap();
+    
+    let flask_inner_height = flask_interior_end - flask_interior_start; 
+    let possible_liquid_height =  flask_inner_height as f32 * 0.9;
+    
+    contents.into_iter().map(|layer| {
+        let a = (layer.bottom_position - layer.top_position) as f32 / possible_liquid_height * 4f32;
+        (a.round() as u32, layer.color)
+    }).collect()
+}
+
+fn find_flask_rows(image: &RgbImage) -> Vec<(u32, u32)> {
+    let mut flask_rows = vec![];
+    for y in GAME_AREA_TOP_LEFT.1..GAME_AREA_BOTTOM_RIGHT.1 {
+        // TODO CHANGE TO HALF SCREEN
+        for x in GAME_AREA_TOP_LEFT.0..(GAME_AREA_TOP_LEFT.0 + 120u32) {
+            if is_flask_outline_color(*image.get_pixel(x, y)) && is_background_color(*image.get_pixel(x, y -1)) {
+                flask_rows.push((x,y));
+                break;
+            }
+        }
+    }
+
+    flask_rows
+}
+
+fn find_next_flask_left_bound(image: &RgbImage, flask_left_bound: u32, y: u32) -> Option<u32> {
+    for x in flask_left_bound..image.width() {
+        if is_flask_outline_color(*image.get_pixel(x, y)) {
+            return Some(x);
+        }
+    }
+
+    None
+}
+
+fn find_flask_right_bound(image: &RgbImage, x_start: u32, y: u32) -> Option<u32> {
+    for x in x_start..image.width() {
+        if is_background_color(*image.get_pixel(x, y)) {
+            return Some(x - 1);
+        }
+    }
+
+    None
+}
+
+fn find_flasks_in_row(image: &RgbImage, row: (u32, u32)) -> Vec<((u32, u32), u32)> {
+    let mut last_searched_x = row.0;
+    let y = row.1;
+
+    let mut current_flask_left_bound = Some(row.0);
+
+    // left and right bound
+    let mut flask_top_bounds = vec![];
+
+
+    loop {
+        match current_flask_left_bound {
+            Some(left_bound) => {
+                let maybe_right_bound = find_flask_right_bound(image, last_searched_x + 1, y);
+
+                match maybe_right_bound {
+                    Some(right_bound) => {
+                        flask_top_bounds.push(((left_bound, right_bound), row.1));
+
+                        last_searched_x = right_bound;
+                        current_flask_left_bound = None;
+                    },
+                    None => panic!("Unfinised flask"),
+                }
+            },
+            None => {
+                let maybe_new_flask_left_bound = find_next_flask_left_bound(image, last_searched_x, y);
+                match maybe_new_flask_left_bound {
+                    Some(left_bound) => {
+                        last_searched_x = left_bound;
+                        current_flask_left_bound = Some(left_bound);
+                    },
+                    None => break,
+                }
+            }
+        }
+    }
+
+    return flask_top_bounds;
+}
+
+fn read_image(image: &RgbImage) -> (Vec<Flask>, Vec<u32>, HashMap<u32, Rgb<u8>) {
+    let rows = find_flask_rows(&image);
+    let flasks: Vec<_> = rows.into_iter().map(|row| find_flasks_in_row(image, row)).collect();
+    
+    let flask_count_in_rows: Vec<_> = flasks.iter().map(|row| row.len() as u32).collect();
+    
+    let flasks: Vec<_> = flasks.into_iter().flatten().map(|flask_pos| {
+        get_flask_contents(image, flask_pos.0.0, flask_pos.0.1, flask_pos.1)
+    }).collect();
+    
+    let mut colors = HashMap::new();
+    let mut color_id_counter = 0;
+
+    flasks.iter().map(|flask|{
+        flask.iter().map(|(size, color)| {
+            
+        })
+    });
+
+    for flask in flasks {
+        for color in flask.iter_mut() {
+            colors.iter().find(|color_mapping| {
+                if square_color_distance(color_mapping.0, color.1) < 10.pow(2) {
+                    
+                }
+            })
+        }
+    }
+    
+    todo!()
+}
+
 
 #[show_image::main]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let image_data = image::open("./test/test_level_81.png")?;
-    let raw_image = image_data.to_rgb8();
-    let image = show_image::ImageView::new(show_image::ImageInfo::rgb8(1920, 1080), &raw_image);
+    let mut raw_image = image_data.to_rgb8();
 
-    // Create a window with default options and display the image.
-    let window = show_image::create_window("image", Default::default())?;
-    window.set_image("image-001", image)?;
+    let row = find_flask_rows(&raw_image)[1];
+    
+    let first_flask = find_flasks_in_row(&raw_image, row)[2];
+    
+    let flask_contents = get_flask_contents(&raw_image, first_flask.0.0, first_flask.0.1, first_flask.1);
+    println!("flask_contents: {:?}", flask_contents);
 
-    sleep(Duration::from_secs(10));
+    show_image_until_escape(raw_image);
 
     Ok(())
-    // let image = image::open("./test/test_level_81.png").unwrap();
 
-    // let window = show_image::create_window("imagfe", Default::default()).unwrap();
+    // println!("{:?}", );
 
-    // window.set_image("image-001", image).unwrap();
+    // for row in find_flask_rows(&raw_image)  {
+    //     let flasks = find_flasks_in_row(&raw_image, row.clone());
+    //     for flask in flasks {
+    //         imageproc::drawing::draw_line_segment_mut(
+    //             &mut raw_image,
+    //             (flask.0 as f32, row.1 as f32),
+    //             (flask.1 as f32, row.1 as f32),
+    //             Rgb([255, 127, 80])
+    //         );
+    //     }
 
-    // println!("{:?}", image);
+    // }
+
+    // raw_image.enumerate_pixels_mut().for_each(|pix| {
+    //     if is_flask_outline_color(*pix.2) {
+    //         *pix.2 = Rgb([255, 127, 80]);
+    //     }
+    // });
+
+
+
 
     // let puzzle = WaterPuzzle {
     // flasks: vec![
@@ -77,6 +328,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // assert!(level.is_valid());
     // solve(level);
 }
+
+fn show_image_until_escape(image: impl Into<show_image::Image>) {
+    let window = show_image::create_window("image", Default::default()).unwrap();
+    window.set_image("image-001", image).unwrap();
+    
+    // Print keyboard events until Escape is pressed, then exit.
+    // If the user closes the window, the channel is closed and the loop also exits.
+    for event in window.event_channel().unwrap() {
+      if let show_image::event::WindowEvent::CloseRequested(_evt) = event {
+        break;
+      } else if let show_image::event::WindowEvent::KeyboardInput(event) = event {
+            if event.input.key_code == Some(show_image::event::VirtualKeyCode::Escape) && event.input.state.is_pressed() {
+                break;
+            }
+        }
+    }
+}
+
+
 
 #[derive(Clone, Hash, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub struct WaterPuzzle {
@@ -164,7 +434,7 @@ impl WaterPuzzle {
         let liquid_ammount =
             self.flasks
                 .iter()
-                .fold(HashMap::<Liquid, u32>::new(), |mut hm, flask| {
+                .fold(HashMap::<LiquidId, u32>::new(), |mut hm, flask| {
                     for layer in flask.contents.iter() {
                         let entry = hm.entry(layer.content);
                         entry.and_modify(|e| *e += layer.size).or_insert(layer.size);
@@ -236,7 +506,7 @@ impl Flask {
         }
     }
 
-    fn add_to_top(&mut self, content: Liquid, ammount: u32) {
+    fn add_to_top(&mut self, content: LiquidId, ammount: u32) {
         if let Some(top_layer) = self.top_layer_mut() {
             if top_layer.content == content {
                 top_layer.size += ammount;
@@ -254,25 +524,26 @@ impl Flask {
 #[derive(Clone, Hash, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub struct Layer {
     size: u32,
-    content: Liquid,
+    content: LiquidId,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Hash, Debug, PartialOrd, Ord)]
-enum Liquid {
-    Gray,
-    Brown,
-    Yellow,
-    Magenta,
-    Green,
-    LightGreen,
-    DarkGreen,
-    Purple,
-    DarkBlue,
-    Blue,
-    Pink,
-    Red,
-    LightBlue,
-}
+// #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug, PartialOrd, Ord)]
+type LiquidId = u32;
+// enum Liquid {
+//     Gray,
+//     Brown,
+//     Yellow,
+//     Magenta,
+//     Green,
+//     LightGreen,
+//     DarkGreen,
+//     Purple,
+//     DarkBlue,
+//     Blue,
+//     Pink,
+//     Red,
+//     LightBlue,
+// }
 
 fn solve_dfs(
     water_puzzle: &mut WaterPuzzle,
@@ -430,95 +701,109 @@ fn find_available_moves(waterpuzzle: &WaterPuzzle) -> Vec<Move> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Flask, Layer, Liquid, WaterPuzzle};
+    use image::Rgb;
 
+    use crate::{Flask, Layer, LiquidId, WaterPuzzle, square_color_distance};
+    
     #[test]
-    fn check_water_puzzle_valid() {
-        let water_puzzle = WaterPuzzle {
-            flasks: vec![
-                Flask {
-                    contents: vec![
-                        Layer {
-                            size: 1,
-                            content: Liquid::Red,
-                        },
-                        Layer {
-                            size: 2,
-                            content: Liquid::Brown,
-                        },
-                    ],
-                    id: 0,
-                },
-                Flask {
-                    contents: vec![
-                        Layer {
-                            size: 2,
-                            content: Liquid::Brown,
-                        },
-                        Layer {
-                            size: 1,
-                            content: Liquid::Red,
-                        },
-                    ],
-                    id: 1,
-                },
-                Flask {
-                    contents: vec![Layer {
-                        size: 2,
-                        content: Liquid::Red,
-                    }],
-                    id: 2,
-                },
-                Flask {
-                    contents: vec![],
-                    id: 3,
-                },
-            ],
-        };
-
-        assert!(water_puzzle.is_valid());
-
-        let water_puzzle = WaterPuzzle {
-            flasks: vec![
-                Flask {
-                    contents: vec![
-                        Layer {
-                            size: 1,
-                            content: Liquid::Red,
-                        },
-                        Layer {
-                            size: 1,
-                            content: Liquid::Brown,
-                        },
-                    ],
-                    id: 0,
-                },
-                Flask {
-                    contents: vec![
-                        Layer {
-                            size: 2,
-                            content: Liquid::Brown,
-                        },
-                        Layer {
-                            size: 1,
-                            content: Liquid::Red,
-                        },
-                    ],
-                    id: 1,
-                },
-                Flask {
-                    contents: vec![Layer {
-                        size: 2,
-                        content: Liquid::Red,
-                    }],
-                    id: 2,
-                },
-                Flask {
-                    contents: vec![],
-                    id: 3,
-                },
-            ],
-        };
-        assert!(!water_puzzle.is_valid());
+    fn test_square_color_distance() {
+        let square_distance = square_color_distance(
+            Rgb([1, 1, 1]),
+            Rgb([10, 10, 10]),
+        );
+        
+        let expected = 9u32.pow(2) * 3;
+        
+        assert_eq!(square_distance, expected);
+        
     }
+    // #[test]
+    // fn check_water_puzzle_valid() {
+    //     let water_puzzle = WaterPuzzle {
+    //         flasks: vec![
+    //             Flask {
+    //                 contents: vec![
+    //                     Layer {
+    //                         size: 1,
+    //                         content: LiquidId::Red,
+    //                     },
+    //                     Layer {
+    //                         size: 2,
+    //                         content: LiquidId::Brown,
+    //                     },
+    //                 ],
+    //                 id: 0,
+    //             },
+    //             Flask {
+    //                 contents: vec![
+    //                     Layer {
+    //                         size: 2,
+    //                         content: LiquidId::Brown,
+    //                     },
+    //                     Layer {
+    //                         size: 1,
+    //                         content: LiquidId::Red,
+    //                     },
+    //                 ],
+    //                 id: 1,
+    //             },
+    //             Flask {
+    //                 contents: vec![Layer {
+    //                     size: 2,
+    //                     content: Liquid::Red,
+    //                 }],
+    //                 id: 2,
+    //             },
+    //             Flask {
+    //                 contents: vec![],
+    //                 id: 3,
+    //             },
+    //         ],
+    //     };
+
+    //     assert!(water_puzzle.is_valid());
+
+    //     let water_puzzle = WaterPuzzle {
+    //         flasks: vec![
+    //             Flask {
+    //                 contents: vec![
+    //                     Layer {
+    //                         size: 1,
+    //                         content: LiquidId::Red,
+    //                     },
+    //                     Layer {
+    //                         size: 1,
+    //                         content: LiquidId::Brown,
+    //                     },
+    //                 ],
+    //                 id: 0,
+    //             },
+    //             Flask {
+    //                 contents: vec![
+    //                     Layer {
+    //                         size: 2,
+    //                         content: Liquid::Brown,
+    //                     },
+    //                     Layer {
+    //                         size: 1,
+    //                         content: Liquid::Red,
+    //                     },
+    //                 ],
+    //                 id: 1,
+    //             },
+    //             Flask {
+    //                 contents: vec![Layer {
+    //                     size: 2,
+    //                     content: Liquid::Red,
+    //                 }],
+    //                 id: 2,
+    //             },
+    //             Flask {
+    //                 contents: vec![],
+    //                 id: 3,
+    //             },
+    //         ],
+    //     };
+    //     assert!(!water_puzzle.is_valid());
+    // }
 }
